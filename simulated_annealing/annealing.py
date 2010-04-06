@@ -137,7 +137,7 @@ def plot_distances(distances_current, figure_id, distances_best, ids_restart, nb
                 loc='upper right' )
     
 
-def annealing(cities, temperature_begin=100000000.0, temperature_end=.1, cooling_factor=.95, nb_iterations=1):
+def annealing(cities, temperature_begin=1.0e+300, temperature_end=.1, cooling_factor=.99, nb_iterations=1):
     """
     Simulated annealing function, implemented with acceptance probability from
     by Kirkpatrick et al., and with restart.
