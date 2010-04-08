@@ -134,7 +134,7 @@ def plot_cities(cities, figure_id):
     return ax_map
 
 
-def plot_distances(distances_current, figure_id, distances_best, ids_restart, nb_cities, nb_iterations, cooling_factor, temperature_start, temperature_end):
+def plot_distances(distances_current, figure_id, distances_best, ids_iteration, nb_cities, nb_iterations, cooling_factor, temperature_start, temperature_end):
     """Plot the evolution of the distance metrics."""
     # plot distances
     fig_distances = plt.figure(figure_id)
@@ -143,19 +143,19 @@ def plot_distances(distances_current, figure_id, distances_best, ids_restart, nb
     line_best = ax_distances.plot(distances_best, 'r', linewidth=2)
     ax_distances.set_title('Simulated annealing for %d cities on %d iteration(s)\nc_factor: %.4f, t_start: %g, t_end: %.4f' % (nb_cities, nb_iterations, cooling_factor, temperature_start, temperature_end))
 
-    # plot restart steps
+    # plot iteration steps
     y_min = min(distances_current)
     y_max = max(distances_current)
-    line_restart = None
+    line_iteration = None
 
-    for step in ids_restart[:-1]:
-        line_restart = ax_distances.plot([step, step], [y_min, y_max], 'g', linewidth=2)
+    for step in ids_iteration[:-1]:
+        line_iteration = ax_distances.plot([step, step], [y_min, y_max], 'g', linewidth=2)
 
     ax_distances.set_xlabel('Steps')
     ax_distances.set_ylabel('Distance (km)')
 
-    index_legend = 3 if len(ids_restart) > 1 else 2
-    plt.legend( (line_current, line_best, line_restart)[:index_legend],
+    index_legend = 3 if len(ids_iteration) > 1 else 2
+    plt.legend( (line_current, line_best, line_iteration)[:index_legend],
                 ('Tested distance', 'Shortest distance', 'Restart')[:index_legend],
                 loc='upper right' )
    
@@ -207,7 +207,7 @@ def annealing(cities, temperature_begin=1.0e+300, temperature_end=.1, cooling_fa
 
     distances_current = []
     distances_best = []
-    ids_restart = []
+    ids_iteration = []
 
     try:
         for iteration in range(nb_iterations):
@@ -260,13 +260,13 @@ def annealing(cities, temperature_begin=1.0e+300, temperature_end=.1, cooling_fa
                 temperature = temperature * cooling_factor
                 step = step + 1
 
-            ids_restart.append(len(distances_current))
+            ids_iteration.append(len(distances_current))
 
     except KeyboardInterrupt, e:
         print "Interrupted on user demand."
-        print 'performed iterations: %d' % iteration
+        print 'performed iterations: %d' % iteration 
 
-    return cities_best, distances_current, distances_best, ids_restart
+    return cities_best, distances_current, distances_best, ids_iteration
 
 
 def display_usage():
@@ -314,7 +314,7 @@ if __name__ == '__main__':
     print 'Starting simulated annealing, type CTRL+C to interrupt...'
 
     cities = cities[:nb_cities]
-    (cities_new, distances_current, distances_best, ids_restart) = annealing(cities, temperature_start, temperature_end, cooling_factor, nb_iterations)
+    (cities_new, distances_current, distances_best, ids_iteration) = annealing(cities, temperature_start, temperature_end, cooling_factor, nb_iterations)
     time_end = time.time()
 
     distance_begin = total_distance_in_km(cities)
@@ -325,12 +325,12 @@ if __name__ == '__main__':
     print 'Optimal distance:     %8.0f km'  % distance_end
 
     ax_map = plot_cities(cities, 1)
-    ax_map.set_title('Initial tour on %d cities\nDistance: %.0f km for ' % (len(cities), distance_begin))
+    ax_map.set_title('Initial tour on %d cities\nDistance: %.0f km' % (len(cities), distance_begin))
 
     if nb_iterations:
         ax_map = plot_cities(cities_new, 2)
         ax_map.set_title('Optimal tour on %d cities\nDistance: %.0f km on %d iteration(s)' % (len(cities), distance_end, nb_iterations))
-        plot_distances(distances_current, 3, distances_best, ids_restart, len(cities), nb_iterations, cooling_factor, temperature_start, temperature_end)
+        plot_distances(distances_current, 3, distances_best, ids_iteration, len(cities), nb_iterations, cooling_factor, temperature_start, temperature_end)
 
     if plot == 'plot':
         plt.show()
