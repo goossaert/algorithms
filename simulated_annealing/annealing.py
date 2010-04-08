@@ -134,14 +134,14 @@ def plot_cities(cities, figure_id):
     return ax_map
 
 
-def plot_distances(distances_current, figure_id, distances_best, ids_restart, nb_cities, nb_iterations):
+def plot_distances(distances_current, figure_id, distances_best, ids_restart, nb_cities, nb_iterations, cooling_factor, temperature_start, temperature_end):
     """Plot the evolution of the distance metrics."""
     # plot distances
     fig_distances = plt.figure(figure_id)
     ax_distances = fig_distances.add_subplot(111)
     line_current = ax_distances.plot(distances_current, linewidth=1)
     line_best = ax_distances.plot(distances_best, 'r', linewidth=2)
-    ax_distances.set_title('Distance evolution for %d cities on %d iteration(s)' % (nb_cities, nb_iterations))
+    ax_distances.set_title('Simulated annealing for %d cities on %d iteration(s)\nc_factor: %.4f, t_start: %g, t_end: %.4f' % (nb_cities, nb_iterations, cooling_factor, temperature_start, temperature_end))
 
     # plot restart steps
     y_min = min(distances_current)
@@ -151,12 +151,12 @@ def plot_distances(distances_current, figure_id, distances_best, ids_restart, nb
     for step in ids_restart[:-1]:
         line_restart = ax_distances.plot([step, step], [y_min, y_max], 'g', linewidth=2)
 
-    ax_distances.set_xlabel('Steps (with systematic sampling at 1%)')
+    ax_distances.set_xlabel('Steps')
     ax_distances.set_ylabel('Distance (km)')
 
     index_legend = 3 if len(ids_restart) > 1 else 2
     plt.legend( (line_current, line_best, line_restart)[:index_legend],
-                ('Tested distance', 'Shortest distance', 'Restarting annealing process')[:index_legend],
+                ('Tested distance', 'Shortest distance', 'Restart')[:index_legend],
                 loc='upper right' )
    
 
@@ -221,7 +221,8 @@ def annealing(cities, temperature_begin=1.0e+300, temperature_end=.1, cooling_fa
 
             step = 0
             while temperature > temperature_end:
-                # swap two random cities, but never touch the first city
+                # compute the indices of the two cities to swap by random,
+                # but never touch the first city (it does not need to change)
                 index = random.sample(range(len(cities_new) - 1), 2)
                 index[0] += 1
                 index[1] += 1
@@ -230,7 +231,6 @@ def annealing(cities, temperature_begin=1.0e+300, temperature_end=.1, cooling_fa
                 swap_before = distance_swap(cities_new, index[0], index[1])
                 cities_new[index[0]], cities_new[index[1]] = cities_new[index[1]], cities_new[index[0]]
                 swap_after = distance_swap(cities_new, index[0], index[1])
-                #print swap_before, swap_after
 
                 # compute the new distance
                 # recomputing all is bad: distance_new = total_distance_in_km(cities_new)
@@ -241,16 +241,20 @@ def annealing(cities, temperature_begin=1.0e+300, temperature_end=.1, cooling_fa
                 if diff < 0 or  math.exp( -diff / temperature ) > random.random():
                     cities_current = cities_new[:]
                     distance_current = distance_new
+                else:
+                    # reset cities and distance
+                    distance_new = distance_current
+                    cities_new = cities_current[:]
 
                 # update the best if current solution is better
                 # not part of the annealing itself, just used for the restart
                 if distance_current < distance_best:
                     cities_best = cities_current[:]
                     distance_best = distance_current
-                    step = 0 # reset step to make sure the point is saved
 
-                if step % 100 == 0:
-                    # systematic sampling: one point every 100th
+                if True:
+                    # if step % 100 == 0:
+                    # uncomment to enable systematic sampling: 1 point every 100th
                     distances_current.append(distance_current)
                     distances_best.append(distance_best)
                 temperature = temperature * cooling_factor
@@ -266,14 +270,19 @@ def annealing(cities, temperature_begin=1.0e+300, temperature_end=.1, cooling_fa
 
 
 def display_usage():
-    print 'usage: %s input [nb_ite] [nb_cities] [c_factor] [t_start] [t_end]' % sys.argv[0]
+    print 'usage: %s input [plot] [nb_ite] [nb_cities] [c_factor] [t_start] [t_end] [r_seed]' % sys.argv[0]
     print '  input: input CSV file containing the city coordinates'
-    print '  nb_ite: number of iterations in the restart process'
-    print '  nb_cities: number of cities read from the input file (n first lines)'
-    print '  c_factor: cooling factor, float number in (0,1)'
-    print '  t_start: initial temperature'
-    print '  t_end: temperature at which the process will be stopped'
+    print '  output: \'plot\' to display figures to screen, \'file\' to save'
+    print '          figures to files (default: \'plot\')'
+    print '  nb_ite: number of iterations in the restart process (default: 1)'
+    print '  nb_cities: number of cities read from the input file (n first lines,'
+    print '             default: all cities in file)'
+    print '  c_factor: cooling factor, float number in (0,1) (default: .95)'
+    print '  t_start: initial temperature (default: 1.0e+50, maximum: 1.0e+300)'
+    print '  t_end: temperature at which the process will be stopped (default: .1)'
     print '         must be smaller than t_start'
+    print '  r_seed: seed for the random number generator (default: standard'
+    print '          \'library\'s default)'
 
 
 if __name__ == '__main__':
@@ -282,22 +291,27 @@ if __name__ == '__main__':
         display_usage()
         sys.exit(0)
 
-    # Initialize random number generator
-    # during development, keep constant seed value: 42
-    random.seed(42) 
-
-    input = sys.argv[1]
-    nb_iterations     = int(sys.argv[2])   if len(sys.argv) > 2 else 1
-    nb_cities         = int(sys.argv[3])   if len(sys.argv) > 3 else -1
-    cooling_factor    = float(sys.argv[4]) if len(sys.argv) > 4 else .99
-    temperature_start = float(sys.argv[5]) if len(sys.argv) > 5 else 1.0e+300
-    temperature_end   = float(sys.argv[6]) if len(sys.argv) > 6 else .1
+    input             = sys.argv[1]
+    plot              = sys.argv[2]        if len(sys.argv) > 2 else 'plot'
+    nb_iterations     = int(sys.argv[3])   if len(sys.argv) > 3 else 1
+    nb_cities         = int(sys.argv[4])   if len(sys.argv) > 4 else -1
+    cooling_factor    = float(sys.argv[5]) if len(sys.argv) > 5 else .95
+    temperature_start = float(sys.argv[6]) if len(sys.argv) > 6 else 1.0e+10
+    temperature_end   = float(sys.argv[7]) if len(sys.argv) > 7 else .1
+    random_seed       = float(sys.argv[8]) if len(sys.argv) > 8 else -1
+    
+    if random_seed == -1:
+        random.seed() 
+    else:
+        random.seed(random_seed)
 
     time_begin = time.time()
     cities = read_cities(input)
     compute_distance_pairs(cities)
 
     nb_cities = len(cities) if nb_cities <= 0 else nb_cities
+
+    print 'Starting simulated annealing, type CTRL+C to interrupt...'
 
     cities = cities[:nb_cities]
     (cities_new, distances_current, distances_best, ids_restart) = annealing(cities, temperature_start, temperature_end, cooling_factor, nb_iterations)
@@ -308,14 +322,33 @@ if __name__ == '__main__':
     print 'Improvement:          %8.0f %%'  % (100 * (distance_begin - distance_end) / distance_begin)
     print 'Time:                 %8.0f sec' % (time_end - time_begin)
     print 'Initial distance:     %8.0f km'  % distance_begin
-    print 'Final distance:       %8.0f km'  % distance_end
+    print 'Optimal distance:     %8.0f km'  % distance_end
 
     ax_map = plot_cities(cities, 1)
-    ax_map.set_title('Initial distance: %.0f km for %d cities' % (distance_begin, len(cities)))
+    ax_map.set_title('Initial tour on %d cities\nDistance: %.0f km for ' % (len(cities), distance_begin))
 
     if nb_iterations:
         ax_map = plot_cities(cities_new, 2)
-        ax_map.set_title('Final distance: %.0f km for %d cities on %d iteration(s)' % (distance_end, len(cities), nb_iterations))
-        plot_distances(distances_current, 3, distances_best, ids_restart, len(cities), nb_iterations)
+        ax_map.set_title('Optimal tour on %d cities\nDistance: %.0f km on %d iteration(s)' % (len(cities), distance_end, nb_iterations))
+        plot_distances(distances_current, 3, distances_best, ids_restart, len(cities), nb_iterations, cooling_factor, temperature_start, temperature_end)
 
-    plt.show()
+    if plot == 'plot':
+        plt.show()
+    else:
+        # save in files
+        format = 'png'
+
+        parameters = { 'nb_cities': len(cities),
+                       'nb_ite': nb_iterations,
+                       'c_factor': cooling_factor,
+                       't_start': temperature_start,
+                       't_end': temperature_end,
+                       'format': format
+                      }
+
+        plt.figure(1)
+        plt.savefig('tsp_cities_c%(nb_cities)d_init_f%(c_factor).4f_s%(t_start)g_e%(t_end).4f.%(format)s' % parameters, format=format)
+        plt.figure(2)
+        plt.savefig('tsp_cities_c%(nb_cities)d_i%(nb_ite)d_f%(c_factor).4f_s%(t_start)g_e%(t_end).4f.%(format)s' % parameters, format=format)
+        plt.figure(3)
+        plt.savefig('tsp_distances_c%(nb_cities)d_i%(nb_ite)d_f%(c_factor).4f_s%(t_start)g_e%(t_end).4f.%(format)s' % parameters, format=format)
